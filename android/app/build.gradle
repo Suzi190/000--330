@@ -67,23 +67,19 @@ def webAssetsDir = layout.buildDirectory.dir('generated/webAssets').get().asFile
 tasks.register('syncWebAssets', Sync) {
     from(rootProject.file('..')) {
         into 'www'
-        include 'index.html'
-        include 'manifest.json'
-        include 'sw.js'
-        include '*.js'
-        include '*.css'
-        include 'icons/**'
-        include 'images/**'
-        include 'img/**'
-        include 'audio/**'
-        include 'fonts/**'
-        include 'pages/**'
-        include 'data/**'
+        // 整站打包：不再逐个 include，避免漏掉根目录图片/字体/JSON 等资源
+        exclude '.git/**'
+        exclude '.github/**'
+        exclude 'android/**'
+        exclude 'node_modules/**'
         exclude '**/*.bak'
         exclude '**/*.map'
         exclude '**/*.md'
-        exclude 'android/**'
-        exclude '.git/**'
+        exclude '**/*.zip'
+        exclude '**/*.apk'
+        exclude '**/*.jks'
+        exclude '**/*.keystore'
+        exclude '**/*.log'
     }
     from(rootProject.file('native')) {
         include '**/*.js'

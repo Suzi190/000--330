@@ -126,7 +126,18 @@ jobs:
           cp "$APK" "dist/EPhone.apk"
           ls -lh dist
           sha256sum dist/*.apk
-          unzip -l dist/*.apk | grep -E 'assets/www/(index|script|style|native/ephone-native)' || true
+          for f in assets/www/index.html assets/www/script.js assets/www/style.css assets/www/sw.js \
+                   assets/www/native/ephone-native.js \
+                   assets/www/210-20250618115221.png \
+                   assets/www/CCA834-BA-5-A90-408-D-94-FA-7-EE156-B6-A765.png \
+                   assets/www/ECE92-BBC-BE57-48-E9-BB2-C-345-B6019-C4-B2.png; do
+            if unzip -l dist/EPhone.apk "$f" > /dev/null 2>&1; then
+              echo "OK   $f"
+            else
+              echo "::error::APK 缺少 $f（检查 android/app/build.gradle 的 syncWebAssets）"
+              exit 1
+            fi
+          done
           APKSIGNER="$(find "$ANDROID_HOME/build-tools" -maxdepth 2 -name apksigner -type f | sort | tail -n 1)"
           echo "using $APKSIGNER"
           "$APKSIGNER" verify --print-certs dist/*.apk | head -n 6

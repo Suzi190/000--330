@@ -4,7 +4,9 @@
 原封不动地打进 APK，并在原生层补上三件事：
 
 1. **返回手势 → 应用内返回**：`MainActivity` 把系统返回事件交给网页的 `window.__ephoneHandleBack()`，
-   由 `native/ephone-native.js` 依次关闭弹层 / 点页面返回按钮 / 回退屏幕栈；网页返回 `false` 时才退到桌面（连续两次返回退出）。
+   由 `native/ephone-native.js` 依次关闭弹层 → 回退页面栈（直接调用 `showScreen` / `switchToCharScreen`）→
+   点击页面返回按钮。网页返回 `handled` 时原生层什么都不做，只有返回 `exit`（已在桌面）才允许"再按一次退出"，
+   返回 `none` 只提示不退出 —— 所以左边缘右滑**不会一下就关掉应用**。
 2. **沉浸式全屏**：隐藏状态栏与导航栏（`WindowInsetsControllerCompat`），软键盘弹出时按 IME inset 收缩 WebView，
    页面里的 `100vh` 不会再把输入框顶出屏幕。
 3. **导入 / 导出可用**：`AndroidApp` 桥把 `StreamSaver`、`<a download>`、`window.open(blob:)`、`DownloadListener`
@@ -24,6 +26,17 @@ android/
 │     └─ res/                      # 主题、图标
 └─ native/ephone-native.js         # 只在 APK 内加载的前端增强层
 ```
+
+## 资源打包
+
+`syncWebAssets`（`app/build.gradle`）会把仓库根目录**整站**同步到 `assets/www/`，
+只排除 `.git` / `.github` / `android` / `node_modules` / `*.bak` / `*.md` / `*.zip` / `*.apk` 等无关文件。
+因此根目录下的图片（`210-20250618115221.png`、`CCA834-…png`、`ECE92-…png` 等）也会一起打进 APK，
+"一起听 / 聊天设置 / 等待回复"三个按钮的图标不再依赖 `postimg.cc` 外链。
+CI 在打包后会逐个校验这些资源，缺文件直接构建失败。
+
+`ephone-native.js` 还额外做了两层图片兜底：外链图标加载失败时换成本地图，
+其它图床（postimg / imgur / catbox 等）失败时自动改走图片代理，仍失败则隐藏破图。
 
 `index.html` 里通过 `if (window.AndroidApp || location.hostname === 'appassets.androidplatform.net') { document.write('<script src="native/ephone-native.js">…') }`
 按需加载增强层，所以同一份网页在浏览器 / GitHub Pages 上行为完全不变（浏览器里两个条件都不成立，不会多请求任何文件）。

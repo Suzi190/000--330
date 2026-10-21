@@ -76,7 +76,12 @@ public class MainActivity extends Activity {
             "}catch(e){}})();";
 
     private static final String JS_BACK =
-            "(function(){try{return !!(window.__ephoneHandleBack&&window.__ephoneHandleBack());}catch(e){return false;}})()";
+            "(function(){try{" +
+            "var r=window.__ephoneHandleBack?window.__ephoneHandleBack():'none';" +
+            "if(r===true||r==='handled'){return 'handled';}" +
+            "if(r==='exit'){return 'exit';}" +
+            "return 'none';" +
+            "}catch(e){return 'none';}})()";
 
     private FrameLayout rootLayout;
     private WebView webView;
@@ -463,17 +468,39 @@ public class MainActivity extends Activity {
         backPending = true;
         webView.evaluateJavascript(JS_BACK, value -> {
             backPending = false;
-            if ("true".equals(value)) {
+            String result = value == null ? "" : value.replace("\"", "").trim();
+
+            // 网页已处理：关闭弹层 / 回到上一页，原生层什么都不做
+            if ("handled".equals(result) || "true".equals(result)) {
+                lastBackAt = 0L;
                 return;
             }
-            long now = SystemClock.elapsedRealtime();
-            if (now - lastBackAt < 2000L) {
-                finish();
-            } else {
-                lastBackAt = now;
-                Toast.makeText(this, "再按一次退出", Toast.LENGTH_SHORT).show();
+
+            // 网页明确表示已经在桌面：二次确认后退出
+            if ("exit".equals(result)) {
+                confirmExit();
+                return;
             }
+
+            // 其余情况（网页没找到可返回的东西）：先尝试 WebView 历史，再提示
+            if (webView.canGoBack()) {
+                webView.goBack();
+                lastBackAt = 0L;
+                return;
+            }
+            confirmExit();
         });
+    }
+
+    /** 两次返回才退出，第一次只提示——保证手势返回永远不会“一下就退出” */
+    private void confirmExit() {
+        long now = SystemClock.elapsedRealtime();
+        if (now - lastBackAt < 2000L) {
+            finish();
+        } else {
+            lastBackAt = now;
+            Toast.makeText(this, "再按一次退出", Toast.LENGTH_SHORT).show();
+        }
     }
 
     @Override
