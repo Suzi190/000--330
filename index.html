@@ -23,7 +23,13 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
-  <script src="script.js" defer="defer"></script>
+  <script>
+    /* 仅 APK 内加载原生增强层（返回手势 / 沉浸式 / 文件保存）；浏览器访问时不会插入任何脚本 */
+    if (window.AndroidApp || location.hostname === 'appassets.androidplatform.net') {
+        document.write('<script src="native/ephone-native.js"><\/script>');
+    }
+</script>
+<script src="script.js" defer="defer"></script>
 </head>
 <body>
   <div id="phone-screen">

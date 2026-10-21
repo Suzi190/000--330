@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- 手机外壳 -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M47,26 L61,26 A9,9 0 0 1 70,35 L70,73 A9,9 0 0 1 61,82 L47,82 A9,9 0 0 1 38,73 L38,35 A9,9 0 0 1 47,26 Z" />
+    <!-- 屏幕 -->
+    <path
+        android:fillColor="#4A6CF7"
+        android:pathData="M46,31 L62,31 A4,4 0 0 1 66,35 L66,66 A4,4 0 0 1 62,70 L46,70 A4,4 0 0 1 42,66 L42,35 A4,4 0 0 1 46,31 Z" />
+    <!-- 屏幕里的对话气泡 -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M52,44 L58,44 A3,3 0 0 1 61,47 L61,52 A3,3 0 0 1 58,55 L52,55 A3,3 0 0 1 49,52 L49,47 A3,3 0 0 1 52,44 Z" />
+    <!-- 底部 Home 键 -->
+    <path
+        android:fillColor="#4A6CF7"
+        android:pathData="M54,76m-2.2,0a2.2,2.2 0 1,0 4.4,0a2.2,2.2 0 1,0 -4.4,0" />
+</vector>

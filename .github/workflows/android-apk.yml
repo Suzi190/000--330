@@ -1,0 +1,112 @@
+name: Build Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - 'index.html'
+      - 'script.js'
+      - 'style.css'
+      - 'manifest.json'
+      - 'sw.js'
+      - 'android/**'
+      - '.github/workflows/android-apk.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: apk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install SDK packages
+        run: |
+          set -e
+          sdkmanager --install "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+          yes | sdkmanager --licenses > /dev/null || true
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+
+      # 有签名 secrets 就用正式签名；没有则临时生成一个测试签名，保证 APK 可安装
+      - name: Prepare signing config
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          set -e
+          mkdir -p android/keystore
+          if [ -n "${KEYSTORE_BASE64:-}" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > android/keystore/ephone-release.jks
+            STORE_PASSWORD="$KEYSTORE_PASSWORD"
+            ALIAS="${KEY_ALIAS:-ephone}"
+            KEY_PASS="${KEY_PASSWORD:-$KEYSTORE_PASSWORD}"
+          else
+            keytool -genkeypair \
+              -keystore android/keystore/ephone-release.jks \
+              -storetype JKS \
+              -alias ephone \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -storepass ephone123456 -keypass ephone123456 \
+              -dname "CN=EPhone, OU=EPhone, O=EPhone, C=CN"
+            STORE_PASSWORD=ephone123456
+            ALIAS=ephone
+            KEY_PASS=ephone123456
+          fi
+          {
+            echo "storeFile=keystore/ephone-release.jks"
+            echo "storePassword=$STORE_PASSWORD"
+            echo "keyAlias=$ALIAS"
+            echo "keyPassword=$KEY_PASS"
+            echo "storeType=JKS"
+          } > android/keystore/keystore.properties
+
+      - name: Build release APK
+        working-directory: android
+        run: gradle --no-daemon --stacktrace assembleRelease -PbuildNumber=${GITHUB_RUN_NUMBER}
+
+      - name: Collect APK
+        run: |
+          set -e
+          mkdir -p dist
+          APK=android/app/build/outputs/apk/release/app-release.apk
+          if [ ! -f "$APK" ]; then
+            echo "::error::没有生成已签名的 app-release.apk（检查 keystore 配置）"
+            find android/app/build/outputs -name '*.apk' -print
+            exit 1
+          fi
+          cp "$APK" "dist/EPhone-${GITHUB_RUN_NUMBER}.apk"
+          ls -lh dist
+          sha256sum dist/*.apk
+          unzip -l dist/*.apk | grep -E 'assets/www/(index\.html|script\.js|style\.css|native/ephone-native\.js)'
+          "${ANDROID_HOME}/build-tools/34.0.0/apksigner" verify --print-certs dist/*.apk | head -n 6
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: EPhone-apk
+          path: dist/*.apk
+          retention-days: 30

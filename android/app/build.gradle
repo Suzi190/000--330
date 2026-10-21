@@ -1,0 +1,118 @@
+plugins {
+    id 'com.android.application'
+}
+
+def keystorePropertiesFile = rootProject.file('keystore/keystore.properties')
+def keystoreProperties = new Properties()
+if (keystorePropertiesFile.exists()) {
+    keystorePropertiesFile.withInputStream { keystoreProperties.load(it) }
+}
+
+def buildNumber = (project.findProperty('buildNumber') ?: '1').toString()
+def buildCode = buildNumber.isInteger() ? buildNumber.toInteger() : 1
+if (buildCode < 1) { buildCode = 1 }
+
+android {
+    namespace 'com.ephone.app'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId 'com.ephone.app'
+        minSdk 29
+        targetSdk 34
+        versionCode buildCode
+        versionName "1.0.${buildNumber}"
+    }
+
+    signingConfigs {
+        release {
+            if (keystorePropertiesFile.exists()) {
+                storeFile rootProject.file(keystoreProperties.getProperty('storeFile', 'keystore/ephone-release.jks'))
+                storePassword keystoreProperties.getProperty('storePassword', '')
+                keyAlias keystoreProperties.getProperty('keyAlias', 'ephone')
+                keyPassword keystoreProperties.getProperty('keyPassword', '')
+                storeType keystoreProperties.getProperty('storeType', 'JKS')
+                v1SigningEnabled true
+                v2SigningEnabled true
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            shrinkResources false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            if (keystorePropertiesFile.exists()) {
+                signingConfig signingConfigs.release
+            }
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    lint {
+        abortOnError false
+        checkReleaseBuilds false
+    }
+}
+
+// 把仓库根目录的静态网页打进 APK 的 assets/www/，避免手动复制、也不会漏文件。
+// 构建产物里的结构：assets/www/index.html、assets/www/script.js、assets/www/native/ephone-native.js
+def webAssetsDir = layout.buildDirectory.dir('generated/webAssets').get().asFile
+
+tasks.register('syncWebAssets', Sync) {
+    from(rootProject.file('..')) {
+        into 'www'
+        include 'index.html'
+        include 'manifest.json'
+        include 'sw.js'
+        include '*.js'
+        include '*.css'
+        include 'icons/**'
+        include 'images/**'
+        include 'img/**'
+        include 'audio/**'
+        include 'fonts/**'
+        include 'pages/**'
+        include 'data/**'
+        exclude '**/*.bak'
+        exclude '**/*.map'
+        exclude '**/*.md'
+        exclude 'android/**'
+        exclude '.git/**'
+    }
+    from(rootProject.file('native')) {
+        include '**/*.js'
+        into 'www/native'
+    }
+    into webAssetsDir
+}
+
+android {
+    sourceSets {
+        main {
+            assets.srcDir(webAssetsDir)
+        }
+    }
+}
+
+tasks.named('preBuild').configure { dependsOn 'syncWebAssets' }
+
+// 某些 AGP 版本的 assets 合并任务不一定经由 preBuild，这里再显式挂一次
+tasks.configureEach { task ->
+    if (task.name.startsWith('merge') && task.name.endsWith('Assets')) {
+        task.dependsOn 'syncWebAssets'
+    }
+    if (task.name.startsWith('package') && task.name.endsWith('Assets')) {
+        task.dependsOn 'syncWebAssets'
+    }
+}
+
+dependencies {
+    implementation 'androidx.core:core:1.13.1'
+    implementation 'androidx.webkit:webkit:1.11.0'
+}
