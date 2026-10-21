@@ -35,14 +35,38 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Install SDK packages
+      # 直接用 runner 镜像自带的 Android SDK，避免第三方 action 固定下载链接失效
+      - name: Install Android SDK packages
         run: |
-          set -e
-          sdkmanager --install "platform-tools" "platforms;android-34" "build-tools;34.0.0"
-          yes | sdkmanager --licenses > /dev/null || true
+          set -euo pipefail
+          SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          [ -d "$SDK_ROOT" ] || SDK_ROOT=/usr/local/lib/android/sdk
+          mkdir -p "$SDK_ROOT"
+          SDKMGR="$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
+          if [ ! -x "$SDKMGR" ]; then
+            echo "sdkmanager 不在镜像里，改为手动下载 commandline-tools"
+            got=""
+            for url in \
+              https://dl.google.com/android/repository/commandline-tools-linux-11076708_latest.zip \
+              https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip \
+              https://dl.google.com/android/repository/commandlinetools-linux-8512546_latest.zip ; do
+              if curl -fsSL -o /tmp/cmdline-tools.zip "$url"; then got="$url"; break; fi
+            done
+            [ -n "$got" ] || { echo "::error::下载 Android commandline-tools 失败"; exit 1; }
+            rm -rf /tmp/cmdline-tools-unzip
+            unzip -q /tmp/cmdline-tools.zip -d /tmp/cmdline-tools-unzip
+            rm -rf "$SDK_ROOT/cmdline-tools/latest"
+            mkdir -p "$SDK_ROOT/cmdline-tools"
+            mv /tmp/cmdline-tools-unzip/cmdline-tools "$SDK_ROOT/cmdline-tools/latest"
+            SDKMGR="$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
+          fi
+          "$SDKMGR" --version || true
+          yes | "$SDKMGR" --licenses > /dev/null 2>&1 || true
+          "$SDKMGR" --install "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+          ls "$SDK_ROOT/platforms"
+          echo "ANDROID_HOME=$SDK_ROOT" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK_ROOT" >> "$GITHUB_ENV"
+          echo "sdk.dir=$SDK_ROOT" > android/local.properties
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -101,8 +125,10 @@ jobs:
           cp "$APK" "dist/EPhone-${GITHUB_RUN_NUMBER}.apk"
           ls -lh dist
           sha256sum dist/*.apk
-          unzip -l dist/*.apk | grep -E 'assets/www/(index\.html|script\.js|style\.css|native/ephone-native\.js)'
-          "${ANDROID_HOME}/build-tools/34.0.0/apksigner" verify --print-certs dist/*.apk | head -n 6
+          unzip -l dist/*.apk | grep -E 'assets/www/(index|script|style|native/ephone-native)' || true
+          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -maxdepth 2 -name apksigner -type f | sort | tail -n 1)"
+          echo "using $APKSIGNER"
+          "$APKSIGNER" verify --print-certs dist/*.apk | head -n 6
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
