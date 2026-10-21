@@ -16,7 +16,7 @@ on:
       - '.github/workflows/android-apk.yml'
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: apk-${{ github.ref }}
@@ -123,6 +123,7 @@ jobs:
             exit 1
           fi
           cp "$APK" "dist/EPhone-${GITHUB_RUN_NUMBER}.apk"
+          cp "$APK" "dist/EPhone.apk"
           ls -lh dist
           sha256sum dist/*.apk
           unzip -l dist/*.apk | grep -E 'assets/www/(index|script|style|native/ephone-native)' || true
@@ -136,3 +137,19 @@ jobs:
           name: EPhone-apk
           path: dist/*.apk
           retention-days: 30
+
+      # 再发到 Release：手机上直接点链接就能下载安装（Artifact 需要登录才能下）
+      - name: Publish APK to GitHub Release
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          NOTES="自动构建 · 运行 #${GITHUB_RUN_NUMBER} · 提交 ${GITHUB_SHA::7} · $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          if gh release view apk-latest > /dev/null 2>&1; then
+            gh release edit apk-latest --notes "$NOTES" --latest
+          else
+            gh release create apk-latest --title "EPhone APK（自动构建）" --notes "$NOTES" --latest
+          fi
+          gh release upload apk-latest "dist/EPhone-${GITHUB_RUN_NUMBER}.apk" "dist/EPhone.apk" --clobber
+

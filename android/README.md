@@ -32,10 +32,17 @@ android/
 
 `.github/workflows/android-apk.yml` 会在 push 到 `main` / `master`、或手动 `Run workflow` 时：
 
-1. 装 JDK 17 + Android SDK 34 + Gradle 8.7；
+1. 装 JDK 17 + Android SDK 34 + Gradle 8.7（Android SDK 用 runner 镜像自带的，缺 `sdkmanager` 时自动下载兜底）；
 2. 从 secrets 还原签名文件（没有 secrets 时生成一个测试签名，保证 APK 可装）；
-3. `gradle assembleRelease -PbuildNumber=<run_number>`；
-4. 把 `EPhone-<run_number>.apk` 上传为 artifact。
+3. `gradle assembleRelease -PbuildNumber=<run_number>`，并用 `apksigner` 校验签名；
+4. 把 `EPhone-<run_number>.apk` 上传为 artifact；
+5. 同时覆盖更新 Release `apk-latest`，手机上直接点链接就能下载安装。
+
+### 手机上下载安装
+
+构建完成后打开 **<https://github.com/Suzi190/000--330/releases/tag/apk-latest>**，
+下载 `EPhone.apk` 即可安装（文件名固定的那个就是最新一次构建，`EPhone-<run_number>.apk` 是同一次构建的存档）。
+Artifact 里的包需要登录 GitHub 才能下载，用不上时忽略即可。
 
 ### 配置正式签名（可选，但建议）
 
